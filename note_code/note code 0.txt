@@ -1,0 +1,485 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:logger/logger.dart';
+import 'package:provider/provider.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (context) => TouristPlannerModel(),
+      child: MaterialApp(
+        title: 'برنامه‌ریز سفر',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          fontFamily: 'Vazir',
+          useMaterial3: true,
+        ),
+        home: const TouristPlannerScreen(),
+        debugShowCheckedModeBanner: false,
+      ),
+    );
+  }
+}
+
+class TouristPlannerScreen extends StatefulWidget {
+  const TouristPlannerScreen({super.key});
+
+  @override
+  State<TouristPlannerScreen> createState() => _TouristPlannerScreenState();
+}
+
+class _TouristPlannerScreenState extends State<TouristPlannerScreen> {
+  final TextEditingController _timeController =
+  TextEditingController(text: '180');
+  final Logger logger = Logger();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final model = Provider.of<TouristPlannerModel>(context, listen: false);
+      model.calculateOptimalTour(int.parse(_timeController.text));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('سفر بهینه بین جاذبه‌های گردشگری'),
+        centerTitle: true,
+      ),
+      body: Directionality(
+        textDirection: TextDirection.rtl,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Consumer<TouristPlannerModel>(
+            builder: (context, model, child) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTimeInput(model),
+                  const SizedBox(height: 16),
+                  _buildPlacesTable(model),
+                  const SizedBox(height: 24),
+                  _buildDistancesTable(model),
+                  const SizedBox(height: 24),
+                  _buildResultSection(model),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          final model =
+          Provider.of<TouristPlannerModel>(context, listen: false);
+          model.generateRandomData(5); //
+          model.calculateOptimalTour(int.parse(_timeController.text));
+        },
+        tooltip: 'تولید داده‌های تصادفی',
+        child: const Icon(Icons.refresh),
+      ),
+    );
+  }
+
+  Widget _buildTimeInput(TouristPlannerModel model) {
+    return Row(
+      children: [
+        const Text('محدودیت زمانی (دقیقه):',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _timeController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding:
+              EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () {
+            model.calculateOptimalTour(int.parse(_timeController.text));
+          },
+          child: const Text('محاسبه'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlacesTable(TouristPlannerModel model) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('جدول زمان بازدید مکان‌ها:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            Table(
+              border: TableBorder.all(),
+              columnWidths: const {
+                0: FlexColumnWidth(1),
+                1: FlexColumnWidth(3),
+                2: FlexColumnWidth(2),
+              },
+              children: [
+                const TableRow(
+                  decoration: BoxDecoration(color: Color.fromARGB(
+                      239, 200, 25, 25)),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text('مکان',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text('نام',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text('زمان بازدید (دقیقه)',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                  ],
+                ),
+                for (var place in model.places)
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(place),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(model.placeNames[place] ?? place),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(model.visitTimes[place]?.toString() ?? '0'),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDistancesTable(TouristPlannerModel model) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('جدول فاصله بین مکان‌ها (دقیقه):',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Table(
+                border: TableBorder.all(),
+                defaultColumnWidth: const FixedColumnWidth(60),
+                children: [
+                  TableRow(
+                    decoration: const BoxDecoration(color: Color.fromARGB(239, 200, 25, 25)),
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(' ',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                      ),
+                      for (var place in model.places)
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            place,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ),
+                  for (var fromPlace in model.places)
+                    TableRow(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(fromPlace,
+                              style:
+                              const TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                        for (var toPlace in model.places)
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              model.distances[fromPlace]?[toPlace]
+                                  ?.toString() ??
+                                  '0',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultSection(TouristPlannerModel model) {
+    if (model.bestPath.isEmpty) {
+      return const SizedBox();
+    }
+
+    final pathWithNames = model.bestPath
+        .map((code) => '$code (${model.placeNames[code] ?? code})')
+        .toList();
+
+    return Card(
+      elevation: 3,
+      color: Colors.blue.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('نتیجه بهینه:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 12),
+            Text('بهترین مسیر: ${pathWithNames.join(' -> ')}',
+                style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text('تعداد مکان‌های بازدید شده: ${model.bestPath.length}',
+                style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text('زمان سفر: ${model.travelTime} دقیقه',
+                style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text('زمان بازدید: ${model.visitTime} دقیقه',
+                style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text('زمان کل: ${model.totalTime} دقیقه',
+                style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timeController.dispose();
+    super.dispose();
+  }
+}
+
+class TouristPlannerModel extends ChangeNotifier {
+  List<String> places = ['A', 'B', 'C', 'D', 'E'];
+  Map<String, String> placeNames = {
+    'A': 'موزه ملی',
+    'B': 'پارک آب و آتش',
+    'C': 'برج میلاد',
+    'D': 'دریاچه چیتگر',
+    'E': 'پل طبیعت',
+  };
+
+  Map<String, int> visitTimes = {
+    'A': 60,
+    'B': 40,
+    'C': 80,
+    'D': 60,
+    'E': 30,
+  };
+
+  Map<String, Map<String, int>> distances = {
+    'A': {'A': 0, 'B': 10, 'C': 25, 'D': 50, 'E': 15},
+    'B': {'A': 10, 'B': 0, 'C': 20, 'D': 40, 'E': 5},
+    'C': {'A': 25, 'B': 20, 'C': 0, 'D': 30, 'E': 15},
+    'D': {'A': 50, 'B': 40, 'C': 30, 'D': 0, 'E': 35},
+    'E': {'A': 15, 'B': 5, 'C': 15, 'D': 35, 'E': 0}
+  };
+
+  List<String> bestPath = [];
+  int totalTime = 0;
+  int travelTime = 0;
+  int visitTime = 0;
+  final Logger logger = Logger();
+
+  void calculateOptimalTour(int maxTime) {
+    final result = optimalTour(places, visitTimes, distances, maxTime);
+    bestPath = result.path;
+    totalTime = result.timeSpent;
+
+    final timeDetails = calculateDetailedTimes(bestPath, visitTimes, distances);
+    travelTime = timeDetails.travelTime;
+    visitTime = timeDetails.visitTime;
+
+    logger.i('بهترین مسیر محاسبه شد: ${bestPath.join(' -> ')}');
+    notifyListeners();
+  }
+
+  void generateRandomData(int numPlaces) {
+    final random = Random();
+
+    places = List.generate(numPlaces, (i) => String.fromCharCode(65 + i));
+
+    placeNames = {};
+    final namesList = [
+      'موزه ملی',
+      'پارک آب و آتش',
+      'برج میلاد',
+      'دریاچه چیتگر',
+      'پل طبیعت',
+      'باغ موزه',
+      'کاخ گلستان',
+      'بام تهران',
+      'باغ پرندگان',
+      'تله کابین توچال',
+      'پارک جمشیدیه',
+      'موزه هنرهای معاصر',
+      'دربند',
+      'باغ کتاب',
+      'پارک ملت'
+    ];
+
+    for (int i = 0; i < places.length; i++) {
+      placeNames[places[i]] =
+      i < namesList.length ? namesList[i] : 'مکان ${places[i]}';
+    }
+
+    visitTimes = {};
+    for (String place in places) {
+      visitTimes[place] = 30 + random.nextInt(71); // 30 تا 100
+    }
+
+    distances = {};
+    for (String p1 in places) {
+      distances[p1] = {};
+      for (String p2 in places) {
+        if (p1 == p2) {
+          distances[p1]![p2] = 0;
+        } else if (distances.containsKey(p2) &&
+            distances[p2]!.containsKey(p1)) {
+          distances[p1]![p2] = distances[p2]![p1]!;
+        } else {
+          distances[p1]![p2] = 10 + random.nextInt(41); // 10 تا 50
+        }
+      }
+    }
+
+    bestPath = [];
+    totalTime = 0;
+    travelTime = 0;
+    visitTime = 0;
+
+    logger.i('داده‌های تصادفی با $numPlaces مکان تولید شدند');
+    notifyListeners();
+  }
+}
+
+class TourResult {
+  final List<String> path;
+  final int timeSpent;
+
+  TourResult(this.path, this.timeSpent);
+}
+
+class TimeDetails {
+  final int travelTime;
+  final int visitTime;
+  final int totalTime;
+
+  TimeDetails(this.travelTime, this.visitTime, this.totalTime);
+}
+
+TourResult optimalTour(List<String> places, Map<String, int> visitTimes,
+    Map<String, Map<String, int>> distances, int totalTime) {
+  List<String> bestPath = [];
+  int bestCount = 0;
+  int bestTime = 999999; //  Infinity
+
+  void dfs(
+      String? current, List<String> path, Set<String> visited, int timeSpent) {
+    if (path.length > bestCount ||
+        (path.length == bestCount && timeSpent < bestTime)) {
+      bestPath = List.from(path);
+      bestCount = path.length;
+      bestTime = timeSpent;
+    }
+
+    for (String nextPlace in places) {
+      if (!visited.contains(nextPlace)) {
+        int travelTime = current == null ? 0 : distances[current]![nextPlace]!;
+        int nextVisitTime = visitTimes[nextPlace]!;
+        int nextTotalTime = timeSpent + travelTime + nextVisitTime;
+
+        if (nextTotalTime <= totalTime) {
+          visited.add(nextPlace);
+          path.add(nextPlace);
+          dfs(nextPlace, path, visited, nextTotalTime);
+          path.removeLast(); // (backtrack)
+          visited.remove(nextPlace);
+        }
+      }
+    }
+  }
+
+  for (String startPlace in places) {
+    Set<String> visited = {startPlace};
+    List<String> path = [startPlace];
+    dfs(startPlace, path, visited, visitTimes[startPlace]!);
+  }
+
+  return TourResult(bestPath, bestTime);
+}
+
+TimeDetails calculateDetailedTimes(List<String> path,
+    Map<String, int> visitTimes, Map<String, Map<String, int>> distances) {
+  int travelTime = 0;
+  int visitTime = 0;
+
+  for (int i = 0; i < path.length; i++) {
+    visitTime += visitTimes[path[i]]!;
+
+    if (i < path.length - 1) {
+      travelTime += distances[path[i]]![path[i + 1]]!;
+    }
+  }
+
+  return TimeDetails(travelTime, visitTime, travelTime + visitTime);
+}

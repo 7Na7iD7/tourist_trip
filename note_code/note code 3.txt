@@ -1,0 +1,1453 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:logger/logger.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (context) => TouristPlannerModel(),
+      child: MaterialApp(
+        title: 'برنامه‌ریز سفر',
+        theme: ThemeData(
+          primaryColor: const Color(0xFF5B8CFF),
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF5B8CFF),
+            secondary: Color(0xFF6FE7C8),
+            tertiary: Color(0xFFFFA48E),
+            surface: Color(0xFFFAFBFF),
+            onSurface: Color(0xFF2D3142),
+            background: Color(0xFFF5F7FA),
+          ),
+          fontFamily: 'Vazir',
+          useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+          cardTheme: CardTheme(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            color: Colors.white,
+            shadowColor: const Color(0x1A000000),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ButtonStyle(
+              backgroundColor: const MaterialStatePropertyAll(Colors.white),
+              foregroundColor: const MaterialStatePropertyAll(Color(0xFF5B8CFF)),
+              padding: const MaterialStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+              elevation: const MaterialStatePropertyAll(2),
+              shape: MaterialStatePropertyAll(RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12))),
+            ),
+          ),
+          textTheme: const TextTheme(
+            displayLarge: TextStyle(color: Color(0xFF2D3142)),
+            bodyLarge: TextStyle(color: Color(0xFF2D3142)),
+            bodyMedium: TextStyle(color: Color(0xFF2D3142)),
+          ),
+        ),
+        home: const TouristPlannerScreen(),
+        debugShowCheckedModeBanner: false,
+      ),
+    );
+  }
+}
+
+class TouristPlannerScreen extends StatefulWidget {
+  const TouristPlannerScreen({super.key});
+
+  @override
+  State<TouristPlannerScreen> createState() => _TouristPlannerScreenState();
+}
+
+class _TouristPlannerScreenState extends State<TouristPlannerScreen> with SingleTickerProviderStateMixin {
+  final TextEditingController _timeController = TextEditingController(text: '180');
+  final Logger logger = Logger();
+  late AnimationController _animationController;
+  late Animation<double> _animation;
+  int _selectedTabIndex = 0;
+  final List<String> _tabs = ['اطلاعات سفر', 'جدول مکان‌ها', 'نقشه فاصله‌ها', 'نتیجه بهینه'];
+
+  @override
+  void initState() {
+    super.initState();
+
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _animation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    );
+
+    _animationController.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final model = Provider.of<TouristPlannerModel>(context, listen: false);
+      model.calculateOptimalTour(int.parse(_timeController.text));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text(
+          'برنامه‌ریز سفر گردشگری',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF5B8CFF), Color(0xFF6FE7C8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x29000000),
+                offset: Offset(0, 4),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white),
+            onPressed: () => _showInfoDialog(context),
+          ),
+        ],
+      ),
+      body: Directionality(
+        textDirection: TextDirection.rtl,
+        child: FadeTransition(
+          opacity: _animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.05),
+              end: Offset.zero,
+            ).animate(_animation),
+            child: Column(
+              children: [
+                const SizedBox(height: kToolbarHeight + 16),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1A000000),
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: List.generate(
+                        _tabs.length,
+                            (index) => GestureDetector(
+                          onTap: () => setState(() => _selectedTabIndex = index),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: _selectedTabIndex == index
+                                  ? const Color(0xFF5B8CFF).withOpacity(0.1)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: _selectedTabIndex == index
+                                  ? Border.all(color: const Color(0xFF5B8CFF), width: 1.5)
+                                  : null,
+                            ),
+                            child: Text(
+                              _tabs[index],
+                              style: TextStyle(
+                                color: _selectedTabIndex == index
+                                    ? const Color(0xFF5B8CFF)
+                                    : Colors.grey.shade700,
+                                fontWeight: _selectedTabIndex == index
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Consumer<TouristPlannerModel>(
+                    builder: (context, model, child) {
+                      return _buildSelectedTabContent(model);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          _showGenerateDataDialog(context);
+        },
+        label: const Text('تولید داده‌های جدید', style: TextStyle(color: Colors.white)),
+        icon: const Icon(Icons.refresh, color: Colors.white),
+        backgroundColor: const Color(0xFF5B8CFF),
+      ),
+    );
+  }
+
+  void _showInfoDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('راهنمای برنامه', textAlign: TextAlign.center),
+        content: const SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'به برنامه‌ریز سفر گردشگری خوش آمدید!',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'این برنامه به شما کمک می‌کند بهترین مسیر بازدید از مکان‌های گردشگری را با توجه به محدودیت زمانی انتخاب کنید.',
+              ),
+              SizedBox(height: 12),
+              Text('راهنما:', style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text('• محدودیت زمانی خود را به دقیقه وارد کنید.'),
+              Text('• می‌توانید با دکمه تولید داده‌های جدید، مکان‌های تصادفی ایجاد کنید.'),
+              Text('• در هر زمان با زدن دکمه محاسبه، مسیر بهینه را دریافت کنید.'),
+              SizedBox(height: 12),
+              Text('با استفاده از تب‌ها، بین بخش‌های مختلف برنامه جابجا شوید.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('متوجه شدم'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGenerateDataDialog(BuildContext context) {
+    final TextEditingController placesController = TextEditingController(text: '5');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('تولید داده‌های جدید', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('تعداد مکان‌های گردشگری را مشخص کنید:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: placesController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                hintText: 'تعداد مکان‌ها (حداکثر 15)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('انصراف'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final places = int.tryParse(placesController.text) ?? 5;
+              final model = Provider.of<TouristPlannerModel>(context, listen: false);
+              model.generateRandomData(min(max(places, 2), 15));
+              model.calculateOptimalTour(int.parse(_timeController.text));
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF5B8CFF),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('تولید'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedTabContent(TouristPlannerModel model) {
+    switch (_selectedTabIndex) {
+      case 0:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildTimeInput(model),
+        );
+      case 1:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildPlacesTable(model),
+        );
+      case 2:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildDistancesTable(model),
+        );
+      case 3:
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _buildResultSection(model),
+        );
+      default:
+        return Container();
+    }
+  }
+
+  Widget _buildTimeInput(TouristPlannerModel model) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('اطلاعات سفر', Icons.timer),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'محدودیت زمانی سفر',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'لطفاً کل زمان در دسترس برای بازدید از مکان‌ها را وارد کنید.',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _timeController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: 'زمان (دقیقه)',
+                  filled: true,
+                  fillColor: const Color(0xFFF5F7FA),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.access_time),
+                  suffixText: 'دقیقه',
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    model.calculateOptimalTour(int.parse(_timeController.text));
+                    // نمایش یک پیام برای اعلام محاسبه
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('مسیر بهینه با موفقیت محاسبه شد!'),
+                        backgroundColor: const Color(0xFF5B8CFF),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        action: SnackBarAction(
+                          label: 'مشاهده',
+                          textColor: Colors.white,
+                          onPressed: () {
+                            setState(() {
+                              _selectedTabIndex = 3; // نمایش نتایج
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.calculate),
+                  label: const Text('محاسبه مسیر بهینه'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5B8CFF),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 20),
+              const Text(
+                'اطلاعات کلی',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildInfoCard(
+                'تعداد مکان‌های موجود',
+                '${model.places.length} مکان',
+                Icons.place,
+                const Color(0xFFE6F0FF),
+                const Color(0xFF5B8CFF),
+              ),
+              const SizedBox(height: 12),
+              _buildInfoCard(
+                'میانگین زمان بازدید',
+                '${model.getAvgVisitTime()} دقیقه',
+                Icons.access_time_filled,
+                const Color(0xFFE6FFF8),
+                const Color(0xFF6FE7C8),
+              ),
+              const SizedBox(height: 12),
+              _buildInfoCard(
+                'میانگین فاصله بین مکان‌ها',
+                '${model.getAvgDistance()} دقیقه',
+                Icons.directions_car,
+                const Color(0xFFFFEEEA),
+                const Color(0xFFFFA48E),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoCard(String title, String value, IconData icon, Color bgColor, Color iconColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: Colors.white),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlacesTable(TouristPlannerModel model) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('جدول مکان‌های گردشگری', Icons.place),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'اطلاعات زمان بازدید از هر مکان گردشگری',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'این جدول زمان مورد نیاز برای بازدید از هر مکان را نشان می‌دهد.',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF5B8CFF),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF5B8CFF).withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        children:  [
+                          SizedBox(width: 16),
+                          Expanded(
+                            flex: 1,
+                            child: Text(
+                              'کد',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              'نام مکان',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              'زمان بازدید',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                        ],
+                      ),
+                    ),
+                    for (var i = 0; i < model.places.length; i++)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: i % 2 == 0 ? Colors.grey.shade50 : Colors.white,
+                          border: i < model.places.length - 1
+                              ? Border(
+                            bottom: BorderSide(color: Colors.grey.shade200),
+                          )
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 1,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 4, horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: _getPlaceColor(model.places[i]),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    model.places[i],
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: Text(
+                                  model.placeNames[model.places[i]] ?? model.places[i],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _getVisitTimeColor(
+                                            model.visitTimes[model.places[i]] ?? 0),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        '${model.visitTimes[model.places[i]]} دقیقه',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDistancesTable(TouristPlannerModel model) {
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+        _buildSectionTitle('جدول فاصله بین مکان‌ها', Icons.map),
+    const SizedBox(height: 16),
+    Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(16),
+    boxShadow: const [
+    BoxShadow(
+    color: Color(0x1A000000),
+    blurRadius: 8,
+    offset: Offset(0, 3),
+    ),
+    ],
+    ),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    const Text(
+    'فاصله زمانی بین مکان‌های گردشگری',
+    style: TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.bold,
+    ),
+    ),
+    const SizedBox(height: 8),
+    const Text(
+    'این جدول نشان‌دهنده زمان سفر (به دقیقه) بین هر دو مکان است.',
+    style: TextStyle(color: Colors.grey, fontSize: 14),
+    ),
+    const SizedBox(height: 16),
+    SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Container(
+    decoration: BoxDecoration(
+    border: Border.all(color: Colors.grey.shade200),
+    borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+    children: [
+    // Header row
+    Row(
+    children: [
+    Container(
+    width: 60,
+    height: 60,
+    decoration: const BoxDecoration(
+    color: Color(0xFF5B8CFF),
+    borderRadius: BorderRadius.only(
+    topRight: Radius.circular(12),
+    ),
+    ),
+    child: const Center(
+    child: Text(
+    'از/به',
+    style: TextStyle(
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+    ),
+    ),
+    ),
+    ),
+    ...model.places.map((place) {
+    return Container(
+    width: 60,
+    height: 60,
+    decoration: BoxDecoration(
+    color: place == model.places.last
+    ? const Color(0xFF5B8CFF)
+        : const Color(0xFF5B8CFF),
+    borderRadius: place == model.places.last
+    ? const BorderRadius.only(
+    topLeft: Radius.circular(12),
+    )
+        : null,
+    border: place != model.places.last
+    ? const Border(
+    right: BorderSide(
+    color: Colors.white, width: 1),
+    )
+        : null,
+    ),
+    child: Center(
+    child: Text(
+    place,
+    style: const TextStyle(
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+    fontSize: 16,
+    ),
+    ),
+    ),
+    );
+    }),
+    ],
+    ),
+    // Data rows
+    for (var i = 0; i < model.places.length; i++)
+    Row(
+    children: [
+    Container(
+    width: 60,
+    height: 60,
+    decoration: BoxDecoration(
+    color: const Color(0xFF5B8CFF),
+    border: i < model.places.length - 1
+    ? const Border(
+    bottom: BorderSide(
+    color: Colors.white, width: 1),
+    top: BorderSide(
+    color: Colors.white, width: 0),
+    )
+        : null,
+    borderRadius: i == model.places.length - 1
+    ? const BorderRadius.only(
+    bottomRight: Radius.circular(12),
+    )
+        : null,
+    ),
+    child: Center(
+    child: Text(
+    model.places[i],
+    style: const TextStyle(
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+    fontSize: 16,
+    ),
+    ),
+    ),
+    ),
+    ...model.places.asMap().entries.map((entry) {
+    final j = entry.key;
+    final place = entry.value;
+    final distance =
+    model.distances[model.places[i]]?[place] ?? 0;
+
+    return Container(
+    width: 60,
+    height: 60,
+    decoration: BoxDecoration(
+    color: i == j
+    ? Colors.grey.shade200
+        : _getDistanceColor(distance),
+      // ادامه کد از آخرین خط
+      border: Border(
+        right: j < model.places.length - 1
+            ? BorderSide(color: Colors.grey.shade200)
+            : BorderSide.none,
+        bottom: i < model.places.length - 1
+            ? BorderSide(color: Colors.grey.shade200)
+            : BorderSide.none,
+      ),
+    ),
+      child: Center(
+        child: i == j
+            ? const Text(
+          '-',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        )
+            : Text(
+          '$distance',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: distance > 30
+                ? Colors.white
+                : Colors.black87,
+          ),
+        ),
+      ),
+    );
+    }),
+    ],
+    ),
+    ],
+    ),
+    ),
+    ),
+      const SizedBox(height: 20),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FA),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildDistanceLegendItem(
+              const Color(0xFFE6F0FF),
+              '< 10 دقیقه',
+              textColor: Colors.black87,
+            ),
+            _buildDistanceLegendItem(
+              const Color(0xFF6FE7C8),
+              '10-20 دقیقه',
+              textColor: Colors.black87,
+            ),
+            _buildDistanceLegendItem(
+              const Color(0xFFFFA48E),
+              '20-30 دقیقه',
+              textColor: Colors.black87,
+            ),
+            _buildDistanceLegendItem(
+              const Color(0xFF5B8CFF),
+              '> 30 دقیقه',
+              textColor: Colors.white,
+            ),
+          ],
+        ),
+      ),
+    ],
+    ),
+    ),
+        ],
+    );
+  }
+
+  Widget _buildDistanceLegendItem(Color color, String text, {required Color textColor}) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: textColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResultSection(TouristPlannerModel model) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('نتیجه بهینه', Icons.emoji_events),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.star,
+                    color: Color(0xFFFFD700),
+                    size: 28,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'بهترین مسیر بازدید:',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE6F0FF),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF5B8CFF)),
+                    ),
+                    child: Text(
+                      '${model.totalTimeSpent}/${int.parse(_timeController.text)} دقیقه',
+                      style: const TextStyle(
+                        color: Color(0xFF5B8CFF),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              if (model.optimalPath.isEmpty || model.optimalPath.length <= 1)
+                const Center(
+                  child: Text(
+                    'هنوز مسیری محاسبه نشده است. لطفاً دکمه محاسبه را بزنید.',
+                    style: TextStyle(color: Colors.grey),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F7FA),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'آمار مسیر:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 8),
+                              Text('• تعداد مکان‌های بازدید شده'),
+                              Text('• کل زمان بازدید'),
+                              Text('• کل زمان رفت و آمد'),
+                              Text('• کل زمان مسیر'),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text(
+                                'مقادیر:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('${model.optimalPath.length} مکان'),
+                              Text('${model.totalVisitTime} دقیقه'),
+                              Text('${model.totalTravelTime} دقیقه'),
+                              Text('${model.totalTimeSpent} دقیقه'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Row(
+                      children: [
+                        Icon(Icons.route, color: Color(0xFF5B8CFF)),
+                        SizedBox(width: 8),
+                        Text(
+                          'جزئیات مسیر:',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    for (var i = 0; i < model.optimalPath.length; i++)
+                      _buildRouteStep(
+                        i,
+                        model.optimalPath[i],
+                        i < model.optimalPath.length - 1
+                            ? model.optimalPath[i + 1]
+                            : null,
+                        model,
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRouteStep(int index, String place, String? nextPlace, TouristPlannerModel model) {
+    final distanceToNext = nextPlace != null ? (model.distances[place]?[nextPlace] ?? 0) : 0;
+    final visitTime = model.visitTimes[place] ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _getPlaceColor(place),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _getPlaceColor(place).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              if (nextPlace != null)
+                Container(
+                  width: 2,
+                  height: 40,
+                  color: Colors.grey.shade300,
+                ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      place,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '-',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        model.placeNames[place] ?? place,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6FFF8),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'زمان بازدید: $visitTime دقیقه',
+                    style: const TextStyle(
+                      color: Color(0xFF6FE7C8),
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (nextPlace != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.arrow_downward,
+                        color: Colors.grey,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFEEEA),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'سفر به ${nextPlace}: $distanceToNext دقیقه',
+                          style: const TextStyle(
+                            color: Color(0xFFFFA48E),
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF5B8CFF).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF5B8CFF).withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF5B8CFF),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF5B8CFF),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getPlaceColor(String place) {
+    final colors = [
+      const Color(0xFF5B8CFF),
+      const Color(0xFF6FE7C8),
+      const Color(0xFFFFA48E),
+      const Color(0xFFFFB966),
+      const Color(0xFF8E80FF),
+    ];
+
+    final index = place.hashCode % colors.length;
+    return colors[index.abs()];
+  }
+
+  Color _getVisitTimeColor(int time) {
+    if (time < 20) {
+      return const Color(0xFF6FE7C8);
+    } else if (time < 40) {
+      return const Color(0xFF5B8CFF);
+    } else {
+      return const Color(0xFFFFA48E);
+    }
+  }
+
+  Color _getDistanceColor(int distance) {
+    if (distance < 10) {
+      return const Color(0xFFE6F0FF);
+    } else if (distance < 20) {
+      return const Color(0xFF6FE7C8);
+    } else if (distance < 30) {
+      return const Color(0xFFFFA48E);
+    } else {
+      return const Color(0xFF5B8CFF);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timeController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+}
+
+// کلاس مدل برنامه‌ریز سفر گردشگری
+class TouristPlannerModel extends ChangeNotifier {
+  // اطلاعات مکان‌ها و مسیرها
+  List<String> places = [];
+  Map<String, int> visitTimes = {};
+  Map<String, Map<String, int>> distances = {};
+  Map<String, String> placeNames = {};
+
+  // اطلاعات مسیر بهینه
+  List<String> optimalPath = [];
+  int totalVisitTime = 0;
+  int totalTravelTime = 0;
+  int totalTimeSpent = 0;
+
+  // سازنده کلاس
+  TouristPlannerModel() {
+    generateRandomData(5);
+  }
+
+  // تولید داده‌های تصادفی برای مکان‌ها
+  void generateRandomData(int count) {
+    final random = Random();
+
+    // پاک کردن داده‌های قبلی
+    places = [];
+    visitTimes = {};
+    distances = {};
+    placeNames = {};
+
+    // نام‌های نمونه برای مکان‌های گردشگری
+    final sampleNames = [
+      'میدان آزادی', 'برج میلاد', 'پل طبیعت', 'موزه ملی', 'کاخ گلستان',
+      'پارک ملت', 'دربند', 'توچال', 'باغ پرندگان', 'بازار بزرگ',
+      'برج آزادی', 'پارک جمشیدیه', 'باغ فردوس', 'درکه', 'چیتگر',
+    ];
+
+    // تولید کدهای مکان‌ها (A, B, C, ...)
+    for (var i = 0; i < count; i++) {
+      final placeCode = String.fromCharCode(65 + i); // A, B, C, ...
+      places.add(placeCode);
+    }
+
+    // تولید زمان بازدید برای هر مکان
+    for (var place in places) {
+      visitTimes[place] = random.nextInt(41) + 10; // بین 10 تا 50 دقیقه
+    }
+
+    // تولید فاصله‌ها بین مکان‌ها
+    for (var from in places) {
+      distances[from] = {};
+      for (var to in places) {
+        if (from == to) {
+          distances[from]![to] = 0;
+        } else {
+          distances[from]![to] = random.nextInt(41) + 5; // بین 5 تا 45 دقیقه
+        }
+      }
+    }
+
+    // اختصاص نام‌های تصادفی به مکان‌ها
+    final shuffledNames = List<String>.from(sampleNames)..shuffle();
+    for (var i = 0; i < places.length; i++) {
+      placeNames[places[i]] = shuffledNames[i];
+    }
+
+    // اعلام تغییرات به لیسنرها
+    notifyListeners();
+  }
+
+  // محاسبه میانگین زمان بازدید
+  int getAvgVisitTime() {
+    if (visitTimes.isEmpty) return 0;
+    int sum = 0;
+    for (var time in visitTimes.values) {
+      sum += time;
+    }
+    return (sum / visitTimes.length).round();
+  }
+
+  // محاسبه میانگین فاصله بین مکان‌ها
+  int getAvgDistance() {
+    if (distances.isEmpty) return 0;
+    int sum = 0;
+    int count = 0;
+
+    for (var from in places) {
+      for (var to in places) {
+        if (from != to) {
+          sum += distances[from]![to] ?? 0;
+          count++;
+        }
+      }
+    }
+
+    return count > 0 ? (sum / count).round() : 0;
+  }
+
+  // محاسبه مسیر بهینه با استفاده از الگوریتم Greedy
+  void calculateOptimalTour(int timeLimit) {
+    // مقداردهی اولیه متغیرها
+    optimalPath = [];
+    totalVisitTime = 0;
+    totalTravelTime = 0;
+    totalTimeSpent = 0;
+
+    if (places.isEmpty) return;
+
+    // لیست مکان‌های باقی‌مانده
+    final List<String> remainingPlaces = List.from(places);
+
+    // شروع از مکان A
+    String currentPlace = 'A';
+    if (remainingPlaces.contains(currentPlace)) {
+      remainingPlaces.remove(currentPlace);
+      optimalPath.add(currentPlace);
+      totalVisitTime += visitTimes[currentPlace] ?? 0;
+      totalTimeSpent += visitTimes[currentPlace] ?? 0;
+    } else if (remainingPlaces.isNotEmpty) {
+      currentPlace = remainingPlaces.removeAt(0);
+      optimalPath.add(currentPlace);
+      totalVisitTime += visitTimes[currentPlace] ?? 0;
+      totalTimeSpent += visitTimes[currentPlace] ?? 0;
+    } else {
+      return;
+    }
+
+    // محاسبه مسیر با استفاده از الگوریتم حریصانه (نزدیک‌ترین همسایه)
+    while (remainingPlaces.isNotEmpty) {
+      String nextPlace = '';
+      int minDistance = double.maxFinite.toInt();
+
+      // یافتن نزدیک‌ترین مکان
+      for (var place in remainingPlaces) {
+        final distance = distances[currentPlace]?[place] ?? 0;
+        final visitTime = visitTimes[place] ?? 0;
+
+        // بررسی محدودیت زمانی
+        if (totalTimeSpent + distance + visitTime <= timeLimit && distance < minDistance) {
+          minDistance = distance;
+          nextPlace = place;
+        }
+      }
+
+      // اگر مکان مناسبی پیدا شد
+      if (nextPlace.isNotEmpty) {
+        remainingPlaces.remove(nextPlace);
+        optimalPath.add(nextPlace);
+
+        totalTravelTime += minDistance;
+        totalVisitTime += visitTimes[nextPlace] ?? 0;
+        totalTimeSpent += minDistance + (visitTimes[nextPlace] ?? 0);
+
+        currentPlace = nextPlace;
+      } else {
+        // اگر با محدودیت زمانی نمی‌توان مکان دیگری را بازدید کرد
+        break;
+      }
+    }
+
+    // اعلام تغییرات به لیسنرها
+    notifyListeners();
+  }
+}
