@@ -120,7 +120,7 @@ This project is licensed under the MIT License. Feel free to use, modify, and di
 For questions or feedback, please open an issue in this repository or contact the maintainer:
 
 - **Email**: navid.office.work@gmail.com
-- **GitHub**: [your-username](https://github.com/7Na7iD7)
+- **GitHub**: (https://github.com/7Na7iD7)
 
 ## Acknowledgments
 
